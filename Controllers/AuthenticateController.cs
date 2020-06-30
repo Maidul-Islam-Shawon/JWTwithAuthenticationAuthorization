@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 using JWTwithAuthenticationAuthorization.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +15,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace JWTwithAuthenticationAuthorization.Controllers
 {
+    //[AllowAnonymous]
     [Route("api/[controller]")]
     [ApiController]
     public class AuthenticateController : ControllerBase
@@ -22,8 +24,7 @@ namespace JWTwithAuthenticationAuthorization.Controllers
         private readonly RoleManager<IdentityRole> roleManager;
         private readonly IConfiguration _configuration;
 
-        public AuthenticateController(UserManager<ApplicationUser> userManager, 
-            RoleManager<IdentityRole> roleManager, IConfiguration configuration)
+        public AuthenticateController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration)
         {
             this.userManager = userManager;
             this.roleManager = roleManager;
@@ -37,7 +38,7 @@ namespace JWTwithAuthenticationAuthorization.Controllers
             var user = await userManager.FindByNameAsync(model.UserName);
             var checkPassword = await userManager.CheckPasswordAsync(user, model.password);
 
-            if(user!=null && checkPassword)
+            if (user != null && checkPassword)
             {
                 var userRoles = await userManager.GetRolesAsync(user);
 
@@ -47,7 +48,7 @@ namespace JWTwithAuthenticationAuthorization.Controllers
                     new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
                 };
 
-                foreach(var userRole in userRoles)
+                foreach (var userRole in userRoles)
                 {
                     authClaim.Add(new Claim(ClaimTypes.Role, userRole));
                 }
@@ -55,12 +56,15 @@ namespace JWTwithAuthenticationAuthorization.Controllers
                 var authsigninKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]));
 
                 var token = new JwtSecurityToken(
-                    expires:DateTime.Now.AddHours(2),
-                    claims:authClaim,
+                    issuer: _configuration["JWT:ValidIssuer"],
+                    audience: _configuration["JWT:ValidAudience"],
+                    expires: DateTime.Now.AddHours(2),
+                    claims: authClaim,
                     signingCredentials: new SigningCredentials(authsigninKey, SecurityAlgorithms.HmacSha256)
                     );
 
-                return Ok(new { 
+                return Ok(new
+                {
                     token = new JwtSecurityTokenHandler().WriteToken(token),
                     expiration = token.ValidTo
                 });
@@ -75,9 +79,9 @@ namespace JWTwithAuthenticationAuthorization.Controllers
         {
             var userExists = await userManager.FindByNameAsync(model.UserName);
 
-            if(userExists != null)
+            if (userExists != null)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, 
+                return StatusCode(StatusCodes.Status500InternalServerError,
                     new Response { Status = "Error!", Message = "User already exists!" });
             }
 
@@ -93,11 +97,14 @@ namespace JWTwithAuthenticationAuthorization.Controllers
             if (!result.Succeeded)
             {
                 return StatusCode(StatusCodes.Status500InternalServerError,
-                    new Response { Status = "Error", 
-                        Message = "User creation failed! Please check user details and try again" });
+                    new Response
+                    {
+                        Status = "Error",
+                        Message = "User creation failed! Please check user details and try again"
+                    });
             }
 
-            return Ok(new Response {Status="Success",Message="User Created Successfully!" });
+            return Ok(new Response { Status = "Success", Message = "User Created Successfully!" });
         }
 
         [HttpPost]
@@ -106,10 +113,10 @@ namespace JWTwithAuthenticationAuthorization.Controllers
         {
             var userExists = await userManager.FindByNameAsync(model.UserName);
 
-            if(userExists != null)
+            if (userExists != null)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, 
-                    new Response { Status="Error",Message="User already exists!"});
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new Response { Status = "Error", Message = "User already exists!" });
             }
 
             ApplicationUser user = new ApplicationUser
@@ -124,22 +131,25 @@ namespace JWTwithAuthenticationAuthorization.Controllers
             if (!result.Succeeded)
             {
                 return StatusCode(StatusCodes.Status500InternalServerError,
-                    new Response { Status = "Error", 
-                        Message = "User creation failed. Please check user details and try again" });
+                    new Response
+                    {
+                        Status = "Error",
+                        Message = "User creation failed. Please check user details and try again"
+                    });
             }
 
 
-            if(!await roleManager.RoleExistsAsync(UserRoles.Admin))
+            if (!await roleManager.RoleExistsAsync(UserRoles.Admin))
             {
                 await roleManager.CreateAsync(new IdentityRole(UserRoles.Admin));
             }
 
-            if(!await roleManager.RoleExistsAsync(UserRoles.User))
+            if (!await roleManager.RoleExistsAsync(UserRoles.User))
             {
                 await roleManager.CreateAsync(new IdentityRole(UserRoles.User));
             }
 
-            if(await roleManager.RoleExistsAsync(UserRoles.Admin))
+            if (await roleManager.RoleExistsAsync(UserRoles.Admin))
             {
                 await userManager.AddToRoleAsync(user, UserRoles.Admin);
             }
@@ -147,5 +157,13 @@ namespace JWTwithAuthenticationAuthorization.Controllers
             return Ok(new Response { Status = "Success", Message = "User Creted Successfully!" });
 
         }
+
+
+        //[HttpGet]
+        //[Route("numbers")]
+        //public string Numbers()
+        //{
+        //    return "This is my Number and my Life";
+        //}
     }
 }
